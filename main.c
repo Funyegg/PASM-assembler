@@ -1,11 +1,11 @@
-//Since this will be used in an environment with my own OS, it can't use standard libraries. Basic IO is an exception
+//Since this will be used in an environment with my own OS, it can't use libraries. Basic IO is an exception
 //Special thanks to disasm.pro and c9x.pro for helping me learn the opcodes!
 
 #include <stdio.h>
 //Constants and global vars
-char allowed[][8] = {"MOV","CLI","STI","INT","OUTB","OUTW","PAD","DB","DW","DD","JMP","LABEL","ORG","CALL","RET"}; //Allowed instructions
-int inscount = 15; //Instruction count, since sizeof on arrays gets all fucky in freestanding environments
-char oprule[] = {2,0,0,1,0,0,1,1,1,1,1,1,1,1,0}; //intended operand count for each
+char allowed[][8] = {"MOV","CLI","STI","INT","OUTB","OUTW","PAD","DB","DW","DD","JMP","LABEL","ORG","CALL","RET","INC","DEC","ADD","SUB"}; //Allowed instructions
+int inscount = 19; //Instruction count, since sizeof on arrays gets all fucky in freestanding environments
+char oprule[] = {2,0,0,1,0,0,1,1,1,1,1,1,1,1,0,1,1,2,2}; //intended operand count for each
 char registers8[][3] = {"AL","CL","DL","BL","AH","CH","DH","BH"}; // The available 8 bit registers
 char labels[50][50] = {0}; //Available labels, can be up to 50 chars long
 int labeldesc[50] = {0}; //Label location descriptors
@@ -27,6 +27,19 @@ return 1;
 void putshort(unsigned short toput, FILE* fpoint){
 short towrite[1] = {toput};
 fwrite(towrite, 2, 1, fpoint);
+}
+
+int findregister(int* registeri, char* regist){
+int mode = 0;
+*registeri = 0;
+while(!compstr(registers8[*registeri], regist) && *registeri<8) (*registeri)++;
+//Something went wrong if it's at the 9th array entry: maybe they're looking for a 16 bit register?
+if(*registeri==8){
+mode = 1;
+*registeri = 0;
+while(!compstr(registers16[*registeri], regist) && *registeri<8) (*registeri)++;
+}
+return mode;
 }
 
 //Converting strings to integers.
@@ -127,13 +140,7 @@ char towrite[2] = {0,0};
 int endloc = 0;
 
 //Find the register's index
-while(!compstr(registers8[registeri], operands[0]) && registeri<8) registeri++;
-//Something went wrong if it's at the 9th array entry: maybe they're looking for a 16 bit register?
-if(registeri==8){
-mode = 1;
-registeri = 0;
-while(!compstr(registers16[registeri], operands[0]) && registeri<8) registeri++;
-}
+mode = (char)findregister(&registeri, operands[0]);
 
 //The register they're looking for doesn't exist. return a code 1
 if(registeri==8) return 1;
@@ -204,11 +211,14 @@ asmlen+=4;
 } else if(found==11){
 //Always an absolute jump to a register, for now
 int registeri = 0;
-while(!compstr(registers16[registeri], operands[0]) && registeri<8) registeri++; //find the register
-if(registeri==8) return 1;
+while(!compstr(registers16[registeri], operands[0]) && registeri<8) registeri++; //find the 16 bit register
+if(registeri==8) return 1; //return if invalid
+
+//Write the instruction
 fputc(0xFF, foutput);
 fputc(registeri+0xE0, foutput);
 asmlen+=2;
+
 } else if(found == 12){
 //Move the operand to the label array
 for(i=0;operands[0][i];i++){
@@ -217,17 +227,86 @@ labels[labeli][i] = operands[0][i];
 labeldesc[labeli] = asmlen+asmloc;
 labeli++;
 } else if(found == 13){
-asmloc = strtoint(operands[0]);
+asmloc = strtoint(operands[0]); //ORG instruction
 } else if(found == 14){
 fputc(0xFF, foutput); //Call a register
 int registeri = 0;
-while(!compstr(registers16[registeri], operands[0]) && registeri<8) registeri++; //find the register
-if(registeri==8) return 1;
+while(!compstr(registers16[registeri], operands[0]) && registeri<8) registeri++; //find the 16 bit register
+if(registeri==8) return 1; // return if invalid
 
+//write the instruction
 fputc(0xD0 + registeri, foutput);
 asmlen+=2;
+
 } else if(found == 15){
+//RET instruction
 putshort(0xC366, foutput);
+asmlen+=2;
+
+} else if(found == 16){
+//INC is pretty big too
+int registeri = 0;
+char mode = findregister(&registeri, operands[0]);
+if(registeri == 8) return 1; //Return if it's an invalid register
+
+if(!mode){
+fputc(0xFE, foutput);
+fputc(0xC0+registeri, foutput);
+asmlen+=2;
+} else{
+fputc(0x40+registeri, foutput);
+asmlen++;
+}
+
+} else if(found == 17){
+//DEC is pretty big too
+int registeri = 0;
+char mode = findregister(&registeri, operands[0]);
+if(registeri == 8) return 1; //Return if it's an invalid register
+
+if(!mode){
+fputc(0xFE, foutput);
+fputc(0xC8+registeri, foutput);
+asmlen+=2;
+} else{
+fputc(0x48+registeri, foutput);
+asmlen++;
+}
+
+} else if(found == 18){
+//Adding
+int registeri = 0;
+char mode = findregister(&registeri, operands[0]);
+if(registeri == 8) return 1; //Return if it's an invalid register
+
+if(!mode){
+fputc(0x80, foutput);
+fputc(0xC0+registeri, foutput);
+fputc(strtoint(operands[1]), foutput);
+asmlen+=3;
+} else{
+fputc(0x81, foutput);
+fputc(0xC0+registeri, foutput);
+putshort(strtoint(operands[1]), foutput);
+asmlen+=4;
+}
+} else if(found == 19){
+//There must be an easier way
+int registeri = 0;
+char mode = findregister(&registeri, operands[0]);
+if(registeri == 8) return 1; //Return if it's an invalid register
+
+if(!mode){
+fputc(0x80, foutput);
+fputc(0xE8+registeri, foutput);
+fputc(strtoint(operands[1]), foutput);
+asmlen+=3;
+} else{
+fputc(0x81, foutput);
+fputc(0xE8+registeri, foutput);
+putshort(strtoint(operands[1]), foutput);
+asmlen+=4;
+}
 }
 return 0;
 }
