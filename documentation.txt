@@ -1,0 +1,43 @@
+Syntax contains no commas.
+EXAMPLE: MOV AH 0x0E
+Everything is assembled in 16 bits (I plan to move it to 32 bits soon since that's what my OS runs on)
+
+Comments start with a ; and should take up the WHOLE line
+PASM supports hexadecimal and decimal, however it doesn't do well with binary
+
+MOV instruction is always moves a defined value or label to a register
+Example: MOV SI 0x7C00
+
+JMP instruction always jumps to the location in a 16 bit register
+Example: JMP AX
+
+CALL instruction always calls the location in a 16 bit registers
+Example: CALL AX
+
+ADD and SUB only add defined values
+Example: ADD AX 3
+
+INC and DEC work as normal
+Example: INC AX
+
+Labels are always defined with a _ at the beginning, and with the LABEL instruction. A label is just a memory address
+Example: LABEL _start
+
+RET is a near return always.
+
+You can't jmp to a label unless it has been already defined
+
+PAD pads up to the nth byte with zeroes
+Example: PAD 512 (to create a 512 byte file, put this at the end)
+
+DW, DB and DD: Append byte/word/double word
+Example: DD 0xDEADBEEF
+
+OUTW and OUTB: Output a word or byte to the port in DX
+Example: OUTW
+
+CLI and STI: Disable or enable enterrupts
+Example: CLI
+
+INT: Software interrupt
+Example: INT 0x10
