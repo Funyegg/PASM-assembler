@@ -1,27 +1,30 @@
-; Test of PASM
-
-; Signify origin and start
+; Set origin and start
 ORG 0x7C00
-LABEL _start
+MOV DI _start
+; JMP to start
+JMP DI
 
-; Display a character
+; Char printing function
+LABEL _outchar
 MOV AH 0x0E
-MOV AL 65
 INT 0x10
-
-; JMP to the start
-MOV AX _start
-JMP AX
-
-; EXTRA: Call something, just to see if this assemble that
-MOV DI 0x6969
-CALL DI
-
-; Return from ???
 RET
 
-; Pad out to make it bootloader suitable
+; Actual start
+LABEL _start
+; Prepare to call the outchar function
+MOV DI _outchar
+
+; Print 2 chars
+MOV AL 66
+CALL DI
+MOV AL 67
+CALL DI
+
+; Loop forecer
+LABEL _infloop
+MOV DI _infloop
+JMP DI
+
 PAD 510
 DW 0xAA55
-
-; Can it comment at the end?
