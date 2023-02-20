@@ -79,7 +79,9 @@ return result;
 
 
 //ASSEMBLING FUNCTION
-int assemble(char* tocompile, FILE* foutput){
+int assemble(char* tocompile, FILE* foutput, char passthrough){
+//Passthrough prevents outputting, but performs all other actions like setting origin, making labels and changing the asm length.
+
 char instruction[8] = {0}; // The instruction for this statement
 char intendedops = 0; // The indended operand for this
 char opcount = 0; //The ACTUAL operand count
@@ -149,64 +151,71 @@ towrite[0] = registeri+0xB0+8*mode; //Now we have the MOV opcode
 
 //Turn the end location into something the computer can understand
 if(operands[1][0]!='_') endloc = strtoint(operands[1]);
+
 else{
-//Find the label
+//Find the label, but only if not passing through
+if(!passthrough){
 int labeli2 = 0;
-while(!compstr(labels[labeli2], operands[1]) && labeli<50) labeli++;
+while(!compstr(labels[labeli2], operands[1]) && labeli2<50) labeli2++;
 if(labeli2==50) return 4; //Invalid label: code 4
 endloc = labeldesc[labeli2];
+
+} else{
+endloc = 0; //Set it blank if you're just passing through
+}
+
 }
 
 //MOV byte if the mode is 0
 if(!mode){
 towrite[1] = (char)endloc; //Now we have the operand
-fwrite(towrite, 1, 2, foutput); //Append the line (as bytes) to the file
+if(!passthrough) fwrite(towrite, 1, 2, foutput); //Append the line (as bytes) to the file
 asmlen+=2;
 } 
 //MOV a word otherwise (2 bytes)
 else{
-fputc(towrite[0], foutput);
-putshort(endloc, foutput);
+if(!passthrough) fputc(towrite[0], foutput);
+if(!passthrough) putshort(endloc, foutput);
 asmlen+=3;
 }
 
 } else if(found==2){
-fputc(0xFA, foutput);
+if(!passthrough) fputc(0xFA, foutput);
 asmlen++;
 }
 else if(found==3) {
-fputc(0xFB, foutput);
+if(!passthrough) fputc(0xFB, foutput);
 asmlen++;
 }
 else if(found==4){
-fputc(0xCD, foutput);
-fputc(strtoint(operands[0]), foutput);
+if(!passthrough) fputc(0xCD, foutput);
+if(!passthrough) fputc(strtoint(operands[0]), foutput);
 asmlen+=2;
 }
 else if(found==5){
-fputc(0xEE,foutput);
+if(!passthrough) fputc(0xEE,foutput);
 asmlen++;
 }
 else if(found==6){
-fputc(0xEF,foutput);
+if(!passthrough) fputc(0xEF,foutput);
 asmlen++;
 }
 else if(found==7){
 int count = strtoint(operands[0])-asmlen;
 for(i=0; i<count;i++){
-fputc(0,foutput);
+if(!passthrough) fputc(0,foutput);
 asmlen++;
 }
 } else if(found==8){
-fputc(strtoint(operands[0]), foutput);
+if(!passthrough) fputc(strtoint(operands[0]), foutput);
 asmlen++;
 }
 else if(found==9){
-putshort(strtoint(operands[0]), foutput);
+if(!passthrough) putshort(strtoint(operands[0]), foutput);
 asmlen+=2;
 }
 else if(found==10){
-putw(strtoint(operands[0]), foutput);
+if(!passthrough) putw(strtoint(operands[0]), foutput);
 asmlen+=4;
 } else if(found==11){
 //Always an absolute jump to a register, for now
@@ -215,61 +224,61 @@ while(!compstr(registers16[registeri], operands[0]) && registeri<8) registeri++;
 if(registeri==8) return 1; //return if invalid
 
 //Write the instruction
-fputc(0xFF, foutput);
-fputc(registeri+0xE0, foutput);
+if(!passthrough) fputc(0xFF, foutput);
+if(!passthrough) fputc(registeri+0xE0, foutput);
 asmlen+=2;
 
 } else if(found == 12){
+if(!passthrough) return 0; //Don't set labels unless passing through
 //Move the operand to the label array
 for(i=0;operands[0][i];i++){
 labels[labeli][i] = operands[0][i];
 }
 labeldesc[labeli] = asmlen+asmloc;
 labeli++;
+
 } else if(found == 13){
 asmloc = strtoint(operands[0]); //ORG instruction
 } else if(found == 14){
-fputc(0xFF, foutput); //Call a register
+if(!passthrough) fputc(0xFF, foutput); //Call a register
 int registeri = 0;
 while(!compstr(registers16[registeri], operands[0]) && registeri<8) registeri++; //find the 16 bit register
 if(registeri==8) return 1; // return if invalid
 
 //write the instruction
-fputc(0xD0 + registeri, foutput);
+if(!passthrough) fputc(0xD0 + registeri, foutput);
 asmlen+=2;
 
 } else if(found == 15){
 //RET instruction
-putshort(0xC366, foutput);
+if(!passthrough) putshort(0xC366, foutput);
 asmlen+=2;
 
 } else if(found == 16){
-//INC is pretty big too
 int registeri = 0;
 char mode = findregister(&registeri, operands[0]);
 if(registeri == 8) return 1; //Return if it's an invalid register
 
 if(!mode){
-fputc(0xFE, foutput);
-fputc(0xC0+registeri, foutput);
+if(!passthrough) fputc(0xFE, foutput);
+if(!passthrough) fputc(0xC0+registeri, foutput);
 asmlen+=2;
 } else{
-fputc(0x40+registeri, foutput);
+if(!passthrough) fputc(0x40+registeri, foutput);
 asmlen++;
 }
 
 } else if(found == 17){
-//DEC is pretty big too
 int registeri = 0;
 char mode = findregister(&registeri, operands[0]);
 if(registeri == 8) return 1; //Return if it's an invalid register
 
 if(!mode){
-fputc(0xFE, foutput);
-fputc(0xC8+registeri, foutput);
+if(!passthrough) fputc(0xFE, foutput);
+if(!passthrough) fputc(0xC8+registeri, foutput);
 asmlen+=2;
 } else{
-fputc(0x48+registeri, foutput);
+if(!passthrough) fputc(0x48+registeri, foutput);
 asmlen++;
 }
 
@@ -280,31 +289,31 @@ char mode = findregister(&registeri, operands[0]);
 if(registeri == 8) return 1; //Return if it's an invalid register
 
 if(!mode){
-fputc(0x80, foutput);
-fputc(0xC0+registeri, foutput);
-fputc(strtoint(operands[1]), foutput);
+if(!passthrough) fputc(0x80, foutput);
+if(!passthrough) fputc(0xC0+registeri, foutput);
+if(!passthrough) fputc(strtoint(operands[1]), foutput);
 asmlen+=3;
 } else{
-fputc(0x81, foutput);
-fputc(0xC0+registeri, foutput);
-putshort(strtoint(operands[1]), foutput);
+if(!passthrough) fputc(0x81, foutput);
+if(!passthrough) fputc(0xC0+registeri, foutput);
+if(!passthrough) putshort(strtoint(operands[1]), foutput);
 asmlen+=4;
 }
 } else if(found == 19){
-//There must be an easier way
+//Subtracting
 int registeri = 0;
 char mode = findregister(&registeri, operands[0]);
 if(registeri == 8) return 1; //Return if it's an invalid register
 
 if(!mode){
-fputc(0x80, foutput);
-fputc(0xE8+registeri, foutput);
-fputc(strtoint(operands[1]), foutput);
+if(!passthrough) fputc(0x80, foutput);
+if(!passthrough) fputc(0xE8+registeri, foutput);
+if(!passthrough) fputc(strtoint(operands[1]), foutput);
 asmlen+=3;
 } else{
-fputc(0x81, foutput);
-fputc(0xE8+registeri, foutput);
-putshort(strtoint(operands[1]), foutput);
+if(!passthrough) fputc(0x81, foutput);
+if(!passthrough) fputc(0xE8+registeri, foutput);
+if(!passthrough) putshort(strtoint(operands[1]), foutput);
 asmlen+=4;
 }
 }
@@ -318,13 +327,14 @@ int i = 0;
 int lncount = 1;
 char instruction[100] = {0};
 char filename[50] = {0};
+char iname[50] = {0};
 char inbyte = 0;
 
 //GET INPUT FILE
 FILE* finputt;
 printf("Input name>");
-scanf("%s",filename);
-finputt = fopen(filename,"r+");
+scanf("%s",iname);
+finputt = fopen(iname,"r+");
 if(!finputt){
 printf("INPUT FILE ERROR. Maybe check if it exists?");
 return 0;
@@ -336,7 +346,7 @@ if(inbyte == '\n') lncount++;
 }
 
 //Re-open file for reading
-finputt = fopen(filename,"r+");
+finputt = fopen(iname,"r+");
 if(!finputt){
 printf("INPUT FILE ERROR. Maybe check if it exists?");
 return 0;
@@ -350,6 +360,41 @@ fclose(foutputt);
 foutputt = fopen(filename,"a+"); //Open file for appending purposes
 inbyte = fgetc(finputt);
 
+//Just passthrough to make labels
+for(i=0;i<lncount;i++){
+int i2 = 0;
+//If the line break leads to a file end, stop passing through
+if(inbyte == EOF) break;
+
+//Get line
+for(inbyte; inbyte!='\r' && inbyte!='\n' && inbyte!=EOF; inbyte=fgetc(finputt)){
+instruction[i2] = inbyte;
+i2++;
+}
+
+//Skip forward
+while(inbyte == '\r' || inbyte == '\n') inbyte = fgetc(finputt);
+
+instruction[i2] = '\n';
+instruction[i2+1] = '\0';
+
+int errcode = assemble(instruction, foutputt, 1);
+if(errcode){
+//return on error
+printf("ERROR ON LINE %i",i+1);
+printf("\nCODE: %i", errcode);
+return 0;
+}
+}
+
+//Reset the length and file pointer
+fclose(finputt);
+finputt = fopen(iname, "r+");
+asmlen = 0;
+inbyte = fgetc(finputt);
+
+
+//Actually assemble
 for(i=0;i<lncount;i++){
 int i2 = 0;
 
@@ -367,15 +412,8 @@ while(inbyte == '\r' || inbyte == '\n') inbyte = fgetc(finputt);
 
 instruction[i2] = '\n';
 instruction[i2+1] = '\0';
+assemble(instruction, foutputt , 0); //No need to check for errors: the passthrough should have found any errors
 
-int errcode = assemble(instruction, foutputt);
-if(errcode){
-printf("ERROR ON LINE %i",i+1);
-printf("\nCODE: %i", errcode);
-break;
-} else{
-printf(instruction);
-}
 }
 fclose(foutputt);
 }
