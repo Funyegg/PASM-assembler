@@ -18,7 +18,7 @@ MOV DI _outchar
 ; Print 2 chars
 MOV AL 66
 CALL DI
-MOV AL 67
+INC AL
 CALL DI
 
 ; Loop forecer
